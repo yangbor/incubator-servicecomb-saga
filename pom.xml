@@ -61,6 +61,7 @@
     <jackson.version>2.9.0</jackson.version>
     <byteman.version>4.0.1</byteman.version>
     <maven-dependency-plugin.version>3.0.2</maven-dependency-plugin.version>
+    <netty.version>2.0.6.Final</netty.version>
   </properties>
 
   <name>ServiceComb Saga</name>
@@ -302,6 +303,11 @@
         <groupId>io.grpc</groupId>
         <artifactId>grpc-netty</artifactId>
         <version>${grpc.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-tcnative-boringssl-static</artifactId>
+        <version>${netty.version}</version>
       </dependency>
       <dependency>
         <groupId>io.grpc</groupId>
