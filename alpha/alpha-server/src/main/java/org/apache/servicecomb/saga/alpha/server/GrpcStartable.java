@@ -20,9 +20,13 @@
 
 package org.apache.servicecomb.saga.alpha.server;
 
+import java.io.File;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
+import java.net.InetSocketAddress;
 import java.util.Arrays;
+
+import javax.net.ssl.SSLException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,15 +34,31 @@ import org.slf4j.LoggerFactory;
 import io.grpc.BindableService;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
-//import io.grpc.netty.NettyServerBuilder; For enable SSL
+import io.grpc.netty.GrpcSslContexts;
+import io.grpc.netty.NettyServerBuilder;
+import io.netty.handler.ssl.ClientAuth;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslProvider;
 
 class GrpcStartable implements ServerStartable {
 
   private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   private final Server server;
 
-  GrpcStartable(int port, BindableService... services) {
-    ServerBuilder<?> serverBuilder = ServerBuilder.forPort(port);
+  GrpcStartable(GrpcServerConfig serverConfig, BindableService... services) {
+    ServerBuilder<?> serverBuilder;
+    if (serverConfig.isEnable()){
+      serverBuilder = NettyServerBuilder.forAddress(
+          new InetSocketAddress(serverConfig.getHost(), serverConfig.getPort()));
+
+      try {
+        ((NettyServerBuilder) serverBuilder).sslContext(getSslContextBuilder(serverConfig).build());
+      } catch (SSLException e) {
+        throw new IllegalStateException("Unable to setup grpc using SSL.", e);
+      }
+    } else {
+      serverBuilder = ServerBuilder.forPort(serverConfig.getPort());
+    }
     Arrays.stream(services).forEach(serverBuilder::addService);
     server = serverBuilder.build();
   }
@@ -56,5 +76,16 @@ class GrpcStartable implements ServerStartable {
       LOG.error("grpc server was interrupted.", e);
       Thread.currentThread().interrupt();
     }
+  }
+
+  private SslContextBuilder getSslContextBuilder(GrpcServerConfig config) {
+    SslContextBuilder sslClientContextBuilder = SslContextBuilder.forServer(new File(config.getCert()),
+        new File(config.getKey()));
+    if (config.isMutalAuth()) {
+      sslClientContextBuilder.trustManager(new File(config.getClientCert()));
+      sslClientContextBuilder.clientAuth(ClientAuth.REQUIRE);
+    }
+    return GrpcSslContexts.configure(sslClientContextBuilder,
+        SslProvider.OPENSSL);
   }
 }
