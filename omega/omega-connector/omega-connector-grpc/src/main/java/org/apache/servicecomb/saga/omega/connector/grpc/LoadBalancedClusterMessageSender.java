@@ -20,6 +20,7 @@ package org.apache.servicecomb.saga.omega.connector.grpc;
 import static java.util.Collections.emptyList;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
+import java.io.File;
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -32,6 +33,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Function;
+
+import javax.net.ssl.SSLException;
 
 import org.apache.servicecomb.saga.omega.context.ServiceConfig;
 import org.apache.servicecomb.saga.omega.transaction.AlphaResponse;
@@ -46,6 +49,11 @@ import org.slf4j.LoggerFactory;
 
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.netty.GrpcSslContexts;
+import io.grpc.netty.NegotiationType;
+import io.grpc.netty.NettyChannelBuilder;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
 
 public class LoadBalancedClusterMessageSender implements MessageSender {
   private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -57,23 +65,38 @@ public class LoadBalancedClusterMessageSender implements MessageSender {
   private final MessageSender retryableMessageSender = new RetryableMessageSender(availableMessageSenders);
   private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
-  public LoadBalancedClusterMessageSender(String[] addresses,
+  public LoadBalancedClusterMessageSender(AlphaClusterConfig clusterConfig,
       MessageSerializer serializer,
       MessageDeserializer deserializer,
       ServiceConfig serviceConfig,
       MessageHandler handler,
       int reconnectDelay) {
 
-    if (addresses.length == 0) {
+    if (clusterConfig.getAddresses().size() == 0) {
       throw new IllegalArgumentException("No reachable cluster address provided");
     }
 
-    channels = new ArrayList<>(addresses.length);
-    for (String address : addresses) {
-      ManagedChannel channel = ManagedChannelBuilder.forTarget(address)
-          .usePlaintext(true)
-          .build();
+    channels = new ArrayList<>(clusterConfig.getAddresses().size());
 
+    SslContext sslContext;
+    try {
+      sslContext = buildSslContext(clusterConfig);
+    } catch (SSLException e) {
+      throw new IllegalArgumentException("Unable to build SslContext", e);
+    }
+
+    for (String address : clusterConfig.getAddresses()) {
+      ManagedChannel channel;
+      if (clusterConfig.isEnableSSL()) {
+         channel = NettyChannelBuilder.forTarget(address)
+            .negotiationType(NegotiationType.TLS)
+            .sslContext(sslContext)
+            .build();
+      } else {
+        channel = ManagedChannelBuilder.forTarget(address)
+            .usePlaintext(true)
+            .build();
+      }
       channels.add(channel);
       senders.put(
           new GrpcClientMessageSender(
@@ -174,5 +197,15 @@ public class LoadBalancedClusterMessageSender implements MessageSender {
       Runnable runnable = new PushBackReconnectRunnable(messageSender, senders, pendingTasks, availableMessageSenders);
       return () -> pendingTasks.offer(runnable);
     };
+  }
+
+  private static SslContext buildSslContext(AlphaClusterConfig clusterConfig) throws SSLException {
+    SslContextBuilder builder = GrpcSslContexts.forClient();
+    builder.trustManager(new File(clusterConfig.getServerCert()));
+
+    if (clusterConfig.isEnableMutualAuth()) {
+      builder.keyManager(new File(clusterConfig.getCert()), new File(clusterConfig.getKey()));
+    }
+    return builder.build();
   }
 }
