@@ -23,6 +23,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import java.io.File;
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.Map;
@@ -54,6 +55,7 @@ import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslProvider;
 
 public class LoadBalancedClusterMessageSender implements MessageSender {
   private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -78,23 +80,24 @@ public class LoadBalancedClusterMessageSender implements MessageSender {
 
     channels = new ArrayList<>(clusterConfig.getAddresses().size());
 
-    SslContext sslContext;
-    try {
-      sslContext = buildSslContext(clusterConfig);
-    } catch (SSLException e) {
-      throw new IllegalArgumentException("Unable to build SslContext", e);
-    }
-
+    SslContext sslContext = null;
     for (String address : clusterConfig.getAddresses()) {
       ManagedChannel channel;
+
       if (clusterConfig.isEnableSSL()) {
+        if (sslContext == null) {
+          try {
+            sslContext = buildSslContext(clusterConfig);
+          } catch (SSLException e) {
+            throw new IllegalArgumentException("Unable to build SslContext", e);
+          }
+        }
          channel = NettyChannelBuilder.forTarget(address)
             .negotiationType(NegotiationType.TLS)
             .sslContext(sslContext)
             .build();
       } else {
-        channel = ManagedChannelBuilder.forTarget(address)
-            .usePlaintext(true)
+        channel = ManagedChannelBuilder.forTarget(address).usePlaintext()
             .build();
       }
       channels.add(channel);
@@ -201,11 +204,20 @@ public class LoadBalancedClusterMessageSender implements MessageSender {
 
   private static SslContext buildSslContext(AlphaClusterConfig clusterConfig) throws SSLException {
     SslContextBuilder builder = GrpcSslContexts.forClient();
-    builder.trustManager(new File(clusterConfig.getServerCert()));
+    // openssl must be used because some older JDk does not support cipher suites required by http2,
+    // and the performance of JDK ssl is pretty low compared to openssl.
+    builder.sslProvider(SslProvider.OPENSSL);
+
+    builder.protocols("TLSv1.2","TLSv1.1");
+    builder.ciphers(Arrays.asList("ECDHE-RSA-AES128-GCM-SHA256",
+        "ECDHE-RSA-AES256-GCM-SHA384",
+        "ECDHE-ECDSA-AES128-SHA256"));
+    builder.trustManager(new File(clusterConfig.getCertChain()));
 
     if (clusterConfig.isEnableMutualAuth()) {
       builder.keyManager(new File(clusterConfig.getCert()), new File(clusterConfig.getKey()));
     }
+
     return builder.build();
   }
 }

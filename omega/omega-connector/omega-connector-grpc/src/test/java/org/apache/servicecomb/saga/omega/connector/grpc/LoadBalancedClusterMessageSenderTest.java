@@ -105,8 +105,10 @@ public class LoadBalancedClusterMessageSenderTest {
   private final MessageSender messageSender = newMessageSender(addresses);
 
   private MessageSender newMessageSender(String[] addresses) {
+    AlphaClusterConfig clusterConfig = new AlphaClusterConfig(Arrays.asList(addresses),
+        false, false, null,null,null);
     return new LoadBalancedClusterMessageSender(
-        addresses,
+        clusterConfig,
         serializer,
         deserializer,
         new ServiceConfig(serviceName),

@@ -13,20 +13,20 @@ public class AlphaClusterConfig {
 
   private String key;
 
-  private String serverCert;
+  private String certChain;
 
   public AlphaClusterConfig(List<String> addresses,
       boolean enableSSL,
       boolean enableMutualAuth,
       String cert,
       String key,
-      String serverCert) {
+      String certChain) {
     this.addresses = addresses;
     this.enableMutualAuth = enableMutualAuth;
     this.enableSSL = enableSSL;
     this.cert = cert;
     this.key = key;
-    this.serverCert = serverCert;
+    this.certChain = certChain;
   }
 
   public List<String> getAddresses() {
@@ -49,7 +49,7 @@ public class AlphaClusterConfig {
     return key;
   }
 
-  public String getServerCert() {
-    return serverCert;
+  public String getCertChain() {
+    return certChain;
   }
 }

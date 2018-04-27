@@ -54,7 +54,7 @@ class GrpcStartable implements ServerStartable {
       try {
         ((NettyServerBuilder) serverBuilder).sslContext(getSslContextBuilder(serverConfig).build());
       } catch (SSLException e) {
-        throw new IllegalStateException("Unable to setup grpc using SSL.", e);
+        throw new IllegalStateException("Unable to setup grpc to use SSL.", e);
       }
     } else {
       serverBuilder = ServerBuilder.forPort(serverConfig.getPort());
@@ -80,7 +80,11 @@ class GrpcStartable implements ServerStartable {
 
   private SslContextBuilder getSslContextBuilder(GrpcServerConfig config) {
     SslContextBuilder sslClientContextBuilder = SslContextBuilder.forServer(new File(config.getCert()),
-        new File(config.getKey()));
+        new File(config.getKey()))
+        .protocols("TLSv1.2","TLSv1.1")
+        .ciphers(Arrays.asList("ECDHE-RSA-AES128-GCM-SHA256",
+            "ECDHE-RSA-AES256-GCM-SHA384",
+            "ECDHE-ECDSA-AES128-SHA256"));
     if (config.isMutalAuth()) {
       sslClientContextBuilder.trustManager(new File(config.getClientCert()));
       sslClientContextBuilder.clientAuth(ClientAuth.REQUIRE);

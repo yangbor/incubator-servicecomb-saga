@@ -22,10 +22,10 @@ alpha:
     host: 0.0.0.0
     port: 8080
     ssl:
-      enable: true
+      enable: false
       cert: server.crt
       key: server.pem
-      enableMutualAuth: true
+      enableMutualAuth: false
       clientCert: client.crt
 ---
 spring:
