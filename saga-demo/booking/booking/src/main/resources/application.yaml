@@ -21,8 +21,8 @@ alpha:
   cluster:
     address: localhost:8080
     ssl:
-      enable: true
+      enable: false
       certChain: ca.crt
-      enableMutualAuth: true
+      enableMutualAuth: false
       cert: client.crt
       key: client.pem
